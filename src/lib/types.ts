@@ -33,6 +33,17 @@ export interface Profile {
   unit: WeightUnit; // preferred display unit for personal weight/goal
   height_cm: number | null;
   goal_weight: number | null; // in the profile's unit
+  push_enabled: boolean;
+  weigh_in_reminders: boolean;
+  created_at: string;
+}
+
+export interface PushSubscription {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
   created_at: string;
 }
 

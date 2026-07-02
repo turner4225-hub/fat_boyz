@@ -22,6 +22,7 @@ import {
   removeMember,
   deleteChallenge,
 } from "./actions";
+import { BroadcastForm } from "./broadcast-form";
 
 function statusOf(c: Challenge): "Upcoming" | "Active" | "Finished" {
   const today = new Date().toLocaleDateString("en-CA");
@@ -314,6 +315,10 @@ export default async function ChallengePage({
             ))}
           </ul>
         </div>
+      )}
+
+      {isAdmin && (
+        <BroadcastForm challengeId={challenge.id} challengeName={challenge.name} />
       )}
 
       {/* Your weigh-in history */}

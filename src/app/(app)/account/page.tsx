@@ -5,6 +5,7 @@ import { buildTimeline, type RawWeighIn } from "@/lib/personal";
 import { bmi, bmiCategory } from "@/lib/health";
 import { fmtWeight } from "@/lib/format";
 import { InstallInstructions } from "./install-instructions";
+import { NotificationSettings } from "./notification-settings";
 import { ProfileForm } from "./profile-form";
 
 export default async function AccountPage() {
@@ -30,6 +31,13 @@ export default async function AccountPage() {
   const current = timeline.at(-1)?.weight ?? null;
   const bmiValue =
     current !== null ? bmi(current, unit, profile?.height_cm ?? null) : null;
+
+  const { count: subCount } = await supabase
+    .from("push_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null;
 
   return (
     <div className="space-y-6">
@@ -58,6 +66,12 @@ export default async function AccountPage() {
       {profile && <ProfileForm profile={profile} />}
 
       <InstallInstructions />
+
+      <NotificationSettings
+        vapidPublicKey={vapidPublicKey}
+        weighInReminders={profile?.weigh_in_reminders ?? true}
+        hasSubscription={(subCount ?? 0) > 0}
+      />
 
       <form action={signOut}>
         <button

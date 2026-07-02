@@ -27,7 +27,8 @@ export function InstallInstructions() {
       <div className="rounded-2xl border border-brand/40 bg-brand/5 p-5">
         <p className="font-bold text-brand">✓ You&apos;re all set</p>
         <p className="mt-1 text-sm text-muted">
-          Fat Boyz is running as an installed app on this device. Nice.
+          Fat Boyz is running as an installed app on this device. Enable
+          notifications below for weigh-in reminders and host messages.
         </p>
       </div>
     );
