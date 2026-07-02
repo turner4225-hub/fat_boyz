@@ -14,6 +14,9 @@ create table if not exists public.profiles (
   id           uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default 'New Boy',
   avatar_url   text,
+  unit         text not null default 'lb' check (unit in ('lb','kg')),
+  height_cm    numeric(5,1),
+  goal_weight  numeric(6,2),
   created_at   timestamptz not null default now()
 );
 

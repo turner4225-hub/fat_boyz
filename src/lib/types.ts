@@ -30,6 +30,9 @@ export interface Profile {
   id: string; // = auth.users.id
   display_name: string;
   avatar_url: string | null;
+  unit: WeightUnit; // preferred display unit for personal weight/goal
+  height_cm: number | null;
+  goal_weight: number | null; // in the profile's unit
   created_at: string;
 }
 

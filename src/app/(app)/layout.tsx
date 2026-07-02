@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireUser, getProfile } from "@/lib/auth";
-import { signOut } from "@/app/login/actions";
+import { BottomNav } from "./bottom-nav";
 
-/** Shared shell for every signed-in page: requires auth + shows the header. */
+/** Shared shell for every signed-in page: requires auth, header, and bottom nav. */
 export default async function AppLayout({
   children,
 }: {
@@ -18,22 +18,18 @@ export default async function AppLayout({
           <Link href="/dashboard" className="text-xl font-black">
             Fat <span className="text-brand">Boyz</span>
           </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted">
-              {profile?.display_name ?? "You"}
-            </span>
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-card"
-              >
-                Log out
-              </button>
-            </form>
-          </div>
+          <Link
+            href="/account"
+            className="text-sm text-muted transition hover:text-foreground"
+          >
+            {profile?.display_name ?? "You"}
+          </Link>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-4xl flex-1 px-6 py-8">{children}</div>
+      <div className="mx-auto w-full max-w-4xl flex-1 px-6 pt-8 pb-28">
+        {children}
+      </div>
+      <BottomNav />
     </div>
   );
 }

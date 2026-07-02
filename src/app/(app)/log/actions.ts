@@ -1,0 +1,69 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireUser, getProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { convertWeight } from "@/lib/health";
+
+export type LogState =
+  | { error?: string; ok?: boolean; count?: number }
+  | undefined;
+
+export async function logWeighInEverywhere(
+  _prev: LogState,
+  formData: FormData,
+): Promise<LogState> {
+  const user = await requireUser();
+  const profile = await getProfile();
+  const unit = profile?.unit ?? "lb";
+
+  const weight = Number(formData.get("weight"));
+  const weighedOn =
+    String(formData.get("weighed_on") ?? "") ||
+    new Date().toLocaleDateString("en-CA");
+
+  if (Number.isNaN(weight) || weight <= 0) {
+    return { error: "Enter a valid weight." };
+  }
+  if (weight > 2000) return { error: "That weight looks off." };
+
+  const supabase = await createClient();
+  const today = new Date().toLocaleDateString("en-CA");
+
+  // Challenges the user is in that haven't ended yet.
+  const { data: memberRows } = await supabase
+    .from("challenge_members")
+    .select("challenge:challenges(id, unit, end_date)")
+    .eq("user_id", user.id);
+
+  const challenges = (memberRows ?? [])
+    .map((m) => m.challenge as unknown as {
+      id: string;
+      unit: "lb" | "kg";
+      end_date: string;
+    })
+    .filter((c) => c && c.end_date >= today);
+
+  if (challenges.length === 0) {
+    return {
+      error: "You're not in any active challenge. Join or start one first.",
+    };
+  }
+
+  const inserts = challenges.map((c) => ({
+    challenge_id: c.id,
+    user_id: user.id,
+    weight: Math.round(convertWeight(weight, unit, c.unit) * 100) / 100,
+    weighed_on: weighedOn,
+  }));
+
+  const { error } = await supabase.from("weigh_ins").insert(inserts);
+  if (error) return { error: error.message };
+
+  revalidatePath("/goals");
+  revalidatePath("/account");
+  revalidatePath("/dashboard");
+  for (const c of challenges) revalidatePath(`/challenges/${c.id}`);
+
+  return { ok: true, count: challenges.length };
+}
