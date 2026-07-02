@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,23 @@ export const metadata: Metadata = {
   title: "Fat Boyz — Weight Loss Challenges",
   description:
     "Run cash-pot weight loss challenges with your friends. Track weigh-ins, climb the leaderboard, win the pot.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Fat Boyz",
+    statusBarStyle: "black-translucent",
+  },
+  // Legacy iOS flag for full-screen "Add to Home Screen" launch.
+  other: { "apple-mobile-web-app-capable": "yes" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
