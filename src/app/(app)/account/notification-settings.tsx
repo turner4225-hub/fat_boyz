@@ -11,6 +11,7 @@ import {
   savePushSubscription,
   removePushSubscription,
   updateNotificationPrefs,
+  sendTestNotification,
 } from "./notification-actions";
 
 type Props = {
@@ -30,14 +31,29 @@ export function NotificationSettings({
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [error, setError] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    setSupported(isPushSupported());
+    const supp = isPushSupported();
+    setSupported(supp);
     setStandalone(isStandalonePwa());
     if (typeof Notification !== "undefined") {
       setPermission(Notification.permission);
     }
+    if (!supp) return;
+    // Reconcile with what THIS device actually has. After deleting and
+    // re-adding the home-screen app, the old subscription is gone even though
+    // the database may still have a row — so trust the device, not the DB.
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration("/");
+        const deviceSub = reg ? await reg.pushManager.getSubscription() : null;
+        setSubscribed(!!deviceSub);
+      } catch {
+        /* ignore */
+      }
+    })();
   }, []);
 
   async function enablePush() {
@@ -74,6 +90,7 @@ export function NotificationSettings({
 
   async function disablePush() {
     setError(null);
+    setTestMsg(null);
     startTransition(async () => {
       try {
         const endpoint = await unsubscribeFromPush();
@@ -82,6 +99,16 @@ export function NotificationSettings({
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not disable notifications.");
       }
+    });
+  }
+
+  function sendTest() {
+    setError(null);
+    setTestMsg(null);
+    startTransition(async () => {
+      const result = await sendTestNotification();
+      if (result?.error) setError(result.error);
+      else setTestMsg("Test sent — check your notifications!");
     });
   }
 
@@ -135,14 +162,30 @@ export function NotificationSettings({
             </button>
           </form>
 
-          <button
-            type="button"
-            onClick={disablePush}
-            disabled={pending}
-            className="text-sm text-muted underline transition hover:text-foreground disabled:opacity-60"
-          >
-            Turn off notifications
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={sendTest}
+              disabled={pending}
+              className="rounded-lg bg-brand/15 px-3 py-1.5 text-sm font-semibold text-brand transition hover:bg-brand/25 disabled:opacity-60"
+            >
+              {pending ? "Sending…" : "Send a test"}
+            </button>
+            <button
+              type="button"
+              onClick={disablePush}
+              disabled={pending}
+              className="text-sm text-muted underline transition hover:text-foreground disabled:opacity-60"
+            >
+              Turn off notifications
+            </button>
+          </div>
+
+          {testMsg && (
+            <p className="rounded-lg bg-brand/10 px-3 py-2 text-sm text-brand">
+              {testMsg}
+            </p>
+          )}
         </div>
       ) : (
         <button

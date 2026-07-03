@@ -3,9 +3,37 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToUsers } from "@/lib/push";
 import type { PushSubscriptionPayload } from "@/lib/push-client";
 
 export type NotificationState = { error?: string; ok?: boolean } | undefined;
+
+/** Send a test push to the current user's own devices (verifies the setup). */
+export async function sendTestNotification(): Promise<NotificationState> {
+  const user = await requireUser();
+  if (
+    !process.env.VAPID_PRIVATE_KEY ||
+    !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  ) {
+    return { error: "Push isn't set up on the server yet (VAPID keys missing)." };
+  }
+  try {
+    const { sent } = await sendPushToUsers([user.id], {
+      title: "Fat Boyz test 🍩",
+      body: "Your notifications are working!",
+      url: "/goals",
+    });
+    if (sent === 0) {
+      return {
+        error:
+          "Couldn't reach this device. Turn notifications off and on again, then retry.",
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not send test." };
+  }
+}
 
 export async function savePushSubscription(
   sub: PushSubscriptionPayload,

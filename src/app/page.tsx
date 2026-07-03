@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getUser } from "@/lib/auth";
 
 const rules = [
   {
@@ -46,7 +48,12 @@ const steps = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  // Signed-in users (e.g. opening the installed shortcut) skip the marketing
+  // page and land on their dashboard. Works for existing installs since they
+  // all open "/".
+  if (await getUser()) redirect("/dashboard");
+
   return (
     <main className="flex-1">
       {/* Hero */}
