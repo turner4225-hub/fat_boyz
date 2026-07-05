@@ -30,20 +30,25 @@ export async function logWeighInEverywhere(
 
   const supabase = await createClient();
   const today = new Date().toLocaleDateString("en-CA");
+  if (weighedOn > today) {
+    return { error: "You can't log a weigh-in in the future." };
+  }
 
-  // Challenges the user is in that haven't ended yet.
+  // Challenges the user is in that are running and had already started by the
+  // weigh-in date (can't backdate a weigh-in into a challenge before it began).
   const { data: memberRows } = await supabase
     .from("challenge_members")
-    .select("challenge:challenges(id, unit, end_date)")
+    .select("challenge:challenges(id, unit, start_date, end_date)")
     .eq("user_id", user.id);
 
   const challenges = (memberRows ?? [])
     .map((m) => m.challenge as unknown as {
       id: string;
       unit: "lb" | "kg";
+      start_date: string;
       end_date: string;
     })
-    .filter((c) => c && c.end_date >= today);
+    .filter((c) => c && c.end_date >= today && c.start_date <= weighedOn);
 
   // No active challenge → save one personal weigh-in (challenge_id null).
   type WeighInInsert = {

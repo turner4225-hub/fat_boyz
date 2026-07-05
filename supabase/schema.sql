@@ -85,7 +85,8 @@ create table if not exists public.challenge_members (
 -- ---------------------------------------------------------------------------
 create table if not exists public.weigh_ins (
   id           uuid primary key default gen_random_uuid(),
-  challenge_id uuid not null references public.challenges (id) on delete cascade,
+  -- null challenge_id = a personal weigh-in not tied to any challenge.
+  challenge_id uuid references public.challenges (id) on delete cascade,
   user_id      uuid not null references public.profiles (id) on delete cascade,
   weight       numeric(6,2) not null check (weight > 0),
   photo_url    text,
@@ -168,12 +169,17 @@ drop policy if exists members_insert_self on public.challenge_members;
 create policy members_insert_self on public.challenge_members
   for insert to authenticated with check (user_id = auth.uid());
 
+-- Only the host may update member rows (mark paid, etc.). Members never update
+-- their own row in the app: joining is via join_challenge_by_code (definer) and
+-- leaving is a delete. Host-only here closes the "mark myself paid" hole.
 drop policy if exists members_update on public.challenge_members;
 create policy members_update on public.challenge_members
   for update to authenticated
   using (
-    user_id = auth.uid()
-    or exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
+    exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
+  )
+  with check (
+    exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
   );
 
 drop policy if exists members_delete on public.challenge_members;
@@ -184,17 +190,33 @@ create policy members_delete on public.challenge_members
     or exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
   );
 
--- weigh_ins: any member of the challenge can see all weigh-ins (weights are
--- public within the crew); you can only create/edit/delete your own.
+-- weigh_ins: members of a challenge can see all its weigh-ins (weights are
+-- public within the crew); you always see your own personal (null) rows. You
+-- create/edit/delete your own; the host can log/remove rows in their challenge.
 drop policy if exists weighins_read on public.weigh_ins;
 create policy weighins_read on public.weigh_ins
   for select to authenticated
-  using (public.is_member(challenge_id, auth.uid()));
+  using (
+    (challenge_id is not null and public.is_member(challenge_id, auth.uid()))
+    or (challenge_id is null and user_id = auth.uid())
+  );
 
 drop policy if exists weighins_insert_own on public.weigh_ins;
 create policy weighins_insert_own on public.weigh_ins
   for insert to authenticated
-  with check (user_id = auth.uid() and public.is_member(challenge_id, auth.uid()));
+  with check (
+    user_id = auth.uid()
+    and (challenge_id is null or public.is_member(challenge_id, auth.uid()))
+  );
+
+-- The challenge host may log a weigh-in for any member of their challenge.
+drop policy if exists weighins_insert_by_host on public.weigh_ins;
+create policy weighins_insert_by_host on public.weigh_ins
+  for insert to authenticated
+  with check (
+    challenge_id is not null
+    and exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
+  );
 
 drop policy if exists weighins_update_own on public.weigh_ins;
 create policy weighins_update_own on public.weigh_ins
@@ -203,6 +225,15 @@ create policy weighins_update_own on public.weigh_ins
 drop policy if exists weighins_delete_own on public.weigh_ins;
 create policy weighins_delete_own on public.weigh_ins
   for delete to authenticated using (user_id = auth.uid());
+
+-- The host may remove weigh-ins in their challenge (fix mistakes).
+drop policy if exists weighins_delete_by_host on public.weigh_ins;
+create policy weighins_delete_by_host on public.weigh_ins
+  for delete to authenticated
+  using (
+    challenge_id is not null
+    and exists (select 1 from public.challenges c where c.id = challenge_id and c.created_by = auth.uid())
+  );
 
 -- ---------------------------------------------------------------------------
 -- join_challenge_by_code: lets an invited user join without being able to read
@@ -229,3 +260,37 @@ begin
   return target.id;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Storage: private bucket for scale-photo proof.
+-- Path convention: "<user_id>/<filename>" → folder[1] is the owner.
+-- Read is owner-only; cross-member proof viewing (a planned feature) will use
+-- server-generated signed URLs for an authorized viewer.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('weigh-in-photos', 'weigh-in-photos', false)
+on conflict (id) do nothing;
+
+drop policy if exists "weigh photos insert own" on storage.objects;
+create policy "weigh photos insert own" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'weigh-in-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "weigh photos read" on storage.objects;
+create policy "weigh photos read" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'weigh-in-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "weigh photos delete own" on storage.objects;
+create policy "weigh photos delete own" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'weigh-in-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
