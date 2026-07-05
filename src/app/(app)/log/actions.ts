@@ -22,6 +22,7 @@ export async function logWeighInEverywhere(
     String(formData.get("weighed_on") ?? "") ||
     new Date().toLocaleDateString("en-CA");
   const photoUrl = String(formData.get("photo_url") ?? "").trim() || null;
+  const note = String(formData.get("note") ?? "").trim() || null;
 
   if (Number.isNaN(weight) || weight <= 0) {
     return { error: "Enter a valid weight." };
@@ -57,6 +58,7 @@ export async function logWeighInEverywhere(
     weight: number;
     weighed_on: string;
     photo_url: string | null;
+    note: string | null;
   };
   const inserts: WeighInInsert[] =
     challenges.length === 0
@@ -67,6 +69,7 @@ export async function logWeighInEverywhere(
             weight,
             weighed_on: weighedOn,
             photo_url: photoUrl,
+            note,
           },
         ]
       : challenges.map((c) => ({
@@ -75,6 +78,7 @@ export async function logWeighInEverywhere(
           weight: Math.round(convertWeight(weight, unit, c.unit) * 100) / 100,
           weighed_on: weighedOn,
           photo_url: photoUrl,
+          note,
         }));
 
   const { error } = await supabase.from("weigh_ins").insert(inserts);

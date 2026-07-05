@@ -23,6 +23,8 @@ import {
   togglePaid,
   removeMember,
   deleteChallenge,
+  hostDeleteWeighIn,
+  leaveChallenge,
 } from "./actions";
 import { BroadcastForm } from "./broadcast-form";
 
@@ -66,10 +68,30 @@ export default async function ChallengePage({
   const pot = challenge.buy_in_amount * members.length;
   const unit = challenge.unit;
   const isAdmin = challenge.created_by === user.id;
+  const status = statusOf(challenge);
   const paidCount = members.filter((m) => m.has_paid).length;
   const myStats = stats.get(user.id);
   const myRow = rows.find((r) => r.member.user_id === user.id);
   const leader = rows[0];
+
+  // Winner(s) once the challenge is over: everyone sharing rank 1 (a tie under
+  // the "split" rule can crown several, who split the pot).
+  const winners = status === "Finished" ? rows.filter((r) => r.isLeader) : [];
+  const winnerShare =
+    winners.length > 0 ? Math.round(pot / winners.length) : 0;
+
+  // Most recent weigh-in per member — powers the host's "remove entry" control.
+  const latestWeighInByUser = new Map<string, WeighIn>();
+  for (const wi of weighIns) {
+    const cur = latestWeighInByUser.get(wi.user_id);
+    if (
+      !cur ||
+      wi.weighed_on > cur.weighed_on ||
+      (wi.weighed_on === cur.weighed_on && wi.created_at > cur.created_at)
+    ) {
+      latestWeighInByUser.set(wi.user_id, wi);
+    }
+  }
   const toFirst =
     myRow && leader && myRow.rank > 1 && myStats
       ? formatGap(challenge, leader.metric - myRow.metric)
@@ -111,7 +133,7 @@ export default async function ChallengePage({
           </p>
         </div>
         <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-gold uppercase">
-          {statusOf(challenge)}
+          {status}
         </span>
       </div>
 
@@ -132,6 +154,33 @@ export default async function ChallengePage({
               Delete
             </ConfirmButton>
           </form>
+        </div>
+      )}
+
+      {/* Winner banner (finished challenges) */}
+      {status === "Finished" && (
+        <div className="mt-6 rounded-2xl border border-gold/40 bg-gold/10 p-6 text-center">
+          {winners.length > 0 ? (
+            <>
+              <p className="text-xs font-bold tracking-wide text-gold uppercase">
+                🏆 Winner{winners.length > 1 ? "s" : ""}
+              </p>
+              <p className="mt-1 text-2xl font-black">
+                {winners
+                  .map((wRow) => wRow.member.profile?.display_name ?? "Member")
+                  .join(" & ")}
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                {winners.length > 1
+                  ? `Split the pot — ${challenge.currency} ${winnerShare.toLocaleString()} each`
+                  : `Takes the ${challenge.currency} ${pot.toLocaleString()} pot`}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              This challenge ended with no weigh-ins on the board.
+            </p>
+          )}
         </div>
       )}
 
@@ -288,13 +337,40 @@ export default async function ChallengePage({
                 key={m.id}
                 className="flex items-center justify-between gap-3 px-5 py-3"
               >
-                <span className="min-w-0 truncate font-medium">
-                  {m.profile?.display_name ?? "Member"}
-                  {m.user_id === challenge.created_by && (
-                    <span className="ml-2 text-xs text-muted">(host)</span>
+                <div className="min-w-0">
+                  <span className="truncate font-medium">
+                    {m.profile?.display_name ?? "Member"}
+                    {m.user_id === challenge.created_by && (
+                      <span className="ml-2 text-xs text-muted">(host)</span>
+                    )}
+                  </span>
+                  {latestWeighInByUser.get(m.user_id) && (
+                    <span className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+                      Last: {fmtWeight(latestWeighInByUser.get(m.user_id)!.weight)}{" "}
+                      {unit} ·{" "}
+                      {formatDate(latestWeighInByUser.get(m.user_id)!.weighed_on)}
+                      <form action={hostDeleteWeighIn}>
+                        <input
+                          type="hidden"
+                          name="weigh_in_id"
+                          value={latestWeighInByUser.get(m.user_id)!.id}
+                        />
+                        <input
+                          type="hidden"
+                          name="challenge_id"
+                          value={challenge.id}
+                        />
+                        <ConfirmButton
+                          message={`Remove ${m.profile?.display_name ?? "this member"}'s last weigh-in?`}
+                          className="text-ring1 transition hover:underline"
+                        >
+                          remove
+                        </ConfirmButton>
+                      </form>
+                    </span>
                   )}
-                </span>
-                <div className="flex items-center gap-2">
+                </div>
+                <div className="flex flex-none items-center gap-2">
                   <form action={togglePaid}>
                     <input type="hidden" name="member_id" value={m.id} />
                     <input
@@ -418,6 +494,19 @@ export default async function ChallengePage({
           Friends tap “Join with code” on their dashboard and enter this.
         </p>
       </div>
+
+      {/* Leave (members only; the host deletes the challenge instead) */}
+      {!isAdmin && (
+        <form action={leaveChallenge} className="mt-6 text-center">
+          <input type="hidden" name="challenge_id" value={challenge.id} />
+          <ConfirmButton
+            message="Leave this challenge? You'll drop off the leaderboard."
+            className="text-sm text-muted transition hover:text-ring1"
+          >
+            Leave challenge
+          </ConfirmButton>
+        </form>
+      )}
     </div>
   );
 }

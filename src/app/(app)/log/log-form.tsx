@@ -82,6 +82,16 @@ export function LogForm({
         </label>
       </div>
 
+      <label className="mt-4 block">
+        <span className="mb-1 block text-sm font-medium">Note (optional)</span>
+        <input
+          name="note"
+          type="text"
+          placeholder="Felt great this week"
+          className={inputClass}
+        />
+      </label>
+
       <div className="mt-4">
         <input type="hidden" name="photo_url" value={photoPath ?? ""} />
         <PhotoInput userId={userId} onChange={setPhotoPath} />

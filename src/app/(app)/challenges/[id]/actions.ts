@@ -194,6 +194,50 @@ export async function removeMember(formData: FormData) {
   revalidatePath(`/challenges/${challengeId}`);
 }
 
+/** Host removes a member's weigh-in (fix a mistaken/bogus entry). */
+export async function hostDeleteWeighIn(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("weigh_in_id") ?? "");
+  const challengeId = String(formData.get("challenge_id") ?? "");
+  if (!id || !challengeId) return;
+
+  const supabase = await createClient();
+  if (await requireHost(supabase, challengeId, user.id)) return;
+
+  // RLS weighins_delete_by_host also enforces this.
+  await supabase
+    .from("weigh_ins")
+    .delete()
+    .eq("id", id)
+    .eq("challenge_id", challengeId);
+
+  revalidatePath(`/challenges/${challengeId}`);
+}
+
+/** A member leaves a challenge. The host can't leave — they delete it instead. */
+export async function leaveChallenge(formData: FormData) {
+  const user = await requireUser();
+  const challengeId = String(formData.get("challenge_id") ?? "");
+  if (!challengeId) return;
+
+  const supabase = await createClient();
+  const { data: challenge } = await supabase
+    .from("challenges")
+    .select("created_by")
+    .eq("id", challengeId)
+    .single();
+  if (!challenge || challenge.created_by === user.id) return;
+
+  await supabase
+    .from("challenge_members")
+    .delete()
+    .eq("challenge_id", challengeId)
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+
 /** Delete the whole challenge (cascades to members + weigh-ins). */
 export async function deleteChallenge(formData: FormData) {
   await requireUser();
