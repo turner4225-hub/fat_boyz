@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Challenge, ChallengeMember, Profile, WeighIn } from "@/lib/types";
+import type { Challenge, WeighIn } from "@/lib/types";
 import { formatDate, fmtWeight } from "@/lib/format";
 import { statsByUser } from "@/lib/stats";
 import {

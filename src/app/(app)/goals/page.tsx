@@ -27,7 +27,6 @@ export default async function GoalsPage() {
     unit,
   );
 
-  const start = timeline[0]?.weight ?? null;
   const current = timeline.at(-1)?.weight ?? null;
   const goal = profile?.goal_weight ?? null;
   const toGoal =

@@ -12,11 +12,17 @@ Fat Boyz — a weight-loss challenge PWA for a group of friends running cash-pot
 
 ```bash
 npm run dev      # dev server (Turbopack). Do NOT hardcode a port; PORT env is respected
-npm run build    # production build — the primary verification step (also type-checks)
+npm run build    # production build — type-checks + builds
 npm run lint     # eslint
+npm run test     # vitest, watch mode
+npm run test:run # vitest, single run (use this in CI / verification)
 ```
 
-There are no tests. `npm run build` + driving the app in a browser is the verification workflow.
+Verification workflow: `npm run test:run` (unit) + `npm run build` (type-check + build), then
+drive the app in a browser for anything user-facing. Unit tests (Vitest) live in
+`src/lib/__tests__/` and cover the pure logic — stats, leaderboard/winner-rules, health/BMI
+conversions, personal timeline, date formatting. **When you change money-critical math (winner
+rules, stats, conversions), add or update a test** so a future change can't silently break it.
 
 ## Stack & versions
 
