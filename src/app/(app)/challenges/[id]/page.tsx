@@ -61,7 +61,7 @@ export default async function ChallengePage({
   const members = (memberRows ?? []) as unknown as MemberWithProfile[];
   const weighIns = (weighInRows ?? []) as WeighIn[];
   const stats = statsByUser(weighIns);
-  const rows = buildLeaderboard(members, stats, challenge);
+  const rows = buildLeaderboard(members, stats, challenge, weighIns);
 
   const pot = challenge.buy_in_amount * members.length;
   const unit = challenge.unit;

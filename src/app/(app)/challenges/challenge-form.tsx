@@ -4,12 +4,14 @@ import { useActionState, useState } from "react";
 import type { FormState } from "./actions";
 import type { Challenge } from "@/lib/types";
 
+// "last_standing" is intentionally omitted until per-member goals + elimination
+// are built. Existing challenges that use it still render (leaderboard falls
+// back to %-lost ranking).
 const WINNER_RULES = [
   { value: "percent_lost", label: "% of body weight lost (classic)" },
   { value: "total_lost", label: "Most weight lost" },
   { value: "first_to_target", label: "First to hit a target" },
   { value: "most_consistent", label: "Most consistent" },
-  { value: "last_standing", label: "Last one standing" },
 ];
 
 const DAYS = [

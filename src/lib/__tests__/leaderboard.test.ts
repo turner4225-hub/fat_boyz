@@ -141,6 +141,64 @@ describe("buildLeaderboard — members without weigh-ins", () => {
   });
 });
 
+describe("buildLeaderboard — most_consistent", () => {
+  // weigh_in_day 0 = Sunday. These dates span 3 distinct weeks for u1 (one has
+  // two entries in the same week) and 2 weeks for u2.
+  const c = challenge({ winner_rule: "most_consistent", weigh_in_day: 0 });
+  const members = [member("u1", "Alice"), member("u2", "Bob")];
+  const weighIns = [
+    w("u1", 200, "2020-01-05"), // week A
+    w("u1", 199, "2020-01-08"), // still week A (Wed) — must not double-count
+    w("u1", 198, "2020-01-12"), // week B
+    w("u1", 197, "2020-01-19"), // week C
+    w("u2", 220, "2020-01-05"), // week A
+    w("u2", 219, "2020-01-12"), // week B
+  ];
+  const rows = buildLeaderboard(members, statsByUser(weighIns), c, weighIns);
+
+  it("ranks by distinct weeks attended, not raw weigh-in count", () => {
+    expect(rows[0].member.user_id).toBe("u1");
+    expect(rows[0].metric).toBe(3); // 3 weeks despite 4 weigh-ins
+    expect(rows[0].displayMetric).toBe("3 wk");
+    expect(rows[1].metric).toBe(2);
+  });
+
+  it("does not reward same-week double logging", () => {
+    // u1's Jan 5 + Jan 8 are the same Sun–Sat week → one week, not two.
+    const alice = rows.find((r) => r.member.user_id === "u1")!;
+    expect(alice.metric).toBe(3);
+  });
+});
+
+describe("buildLeaderboard — tie-breaker", () => {
+  const members = [member("u1", "Alice"), member("u2", "Bob")];
+  // Both lose exactly 10 lb → identical percent metric.
+  const weighIns = [
+    w("u1", 200, "2020-01-05"),
+    w("u1", 190, "2020-01-20"), // reached −10 on Jan 20
+    w("u2", 200, "2020-01-05"),
+    w("u2", 190, "2020-02-10"), // reached −10 later, Feb 10
+  ];
+
+  it("splits the pot on a tie under 'split' (shared rank + tiedForRank)", () => {
+    const c = challenge({ tie_breaker: "split" });
+    const rows = buildLeaderboard(members, statsByUser(weighIns), c, weighIns);
+    expect(rows[0].rank).toBe(1);
+    expect(rows[1].rank).toBe(1); // shared
+    expect(rows[0].tiedForRank).toBe(true);
+    expect(rows[1].tiedForRank).toBe(true);
+  });
+
+  it("breaks the tie by earliest achiever under 'earliest_best'", () => {
+    const c = challenge({ tie_breaker: "earliest_best" });
+    const rows = buildLeaderboard(members, statsByUser(weighIns), c, weighIns);
+    expect(rows[0].member.user_id).toBe("u1"); // hit −10 first
+    expect(rows[0].rank).toBe(1);
+    expect(rows[1].rank).toBe(2);
+    expect(rows[0].tiedForRank).toBe(false);
+  });
+});
+
 describe("pctLabel", () => {
   it("shows loss as negative and gain as positive", () => {
     expect(pctLabel({ lostAbs: 12, lostPct: 5 } as never)).toBe("−5.0%");

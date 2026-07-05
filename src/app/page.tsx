@@ -17,11 +17,7 @@ const rules = [
   },
   {
     title: "Most consistent",
-    body: "Best average weekly loss and fewest missed weigh-ins. Rewards showing up.",
-  },
-  {
-    title: "Last one standing",
-    body: "Everyone sets a goal. Miss it and you're out. Survivors split the pot.",
+    body: "Whoever weighs in the most weeks. Log twice in a week and it still counts once — rewards showing up.",
   },
 ];
 
