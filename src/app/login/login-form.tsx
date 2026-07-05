@@ -51,6 +51,17 @@ export function LoginForm() {
           autoComplete={mode === "signin" ? "current-password" : "new-password"}
         />
 
+        {mode === "signin" && (
+          <div className="text-right">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-muted hover:text-foreground"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        )}
+
         {state?.error && (
           <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
             {state.error}

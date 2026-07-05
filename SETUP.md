@@ -50,6 +50,20 @@ npm run dev
 
 Then open http://localhost:3000 in your browser.
 
+## 6. (Optional) Turn on password reset
+
+For the "Forgot password?" link to work, Supabase needs to know it's allowed to
+send people back to your app after they click the email link:
+
+1. In the Supabase dashboard, go to **Authentication → URL Configuration**.
+2. Under **Redirect URLs**, click **Add URL** and add both:
+   - `https://fat-boyz-one.vercel.app/reset-password`
+   - `http://localhost:3000/reset-password` (for local testing)
+3. Save.
+
+That's it — the reset email uses Supabase's built-in mailer. On the free tier
+those emails are rate-limited, which is fine for the occasional reset.
+
 ---
 
 Tell Claude once this is done ("Supabase is connected") and we'll build the
