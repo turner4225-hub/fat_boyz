@@ -17,8 +17,9 @@ export async function logWeighIn(
   const weight = Number(formData.get("weight"));
   const weighedOn =
     String(formData.get("weighed_on") ?? "") ||
-    new Date().toISOString().slice(0, 10);
+    new Date().toLocaleDateString("en-CA");
   const note = String(formData.get("note") ?? "").trim() || null;
+  const photoUrl = String(formData.get("photo_url") ?? "").trim() || null;
 
   if (!challengeId) return { error: "Missing challenge." };
   if (Number.isNaN(weight) || weight <= 0) {
@@ -27,12 +28,70 @@ export async function logWeighIn(
   if (weight > 2000) return { error: "That weight looks off — double-check it." };
 
   const supabase = await createClient();
+
+  // Enforce the challenge's photo-proof setting server-side.
+  const { data: challenge } = await supabase
+    .from("challenges")
+    .select("photo_proof")
+    .eq("id", challengeId)
+    .single();
+  if (challenge?.photo_proof === "required" && !photoUrl) {
+    return { error: "This challenge requires a scale photo." };
+  }
+
   const { error } = await supabase.from("weigh_ins").insert({
     challenge_id: challengeId,
     user_id: user.id,
     weight,
     weighed_on: weighedOn,
     note,
+    photo_url: photoUrl,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/challenges/${challengeId}`);
+  return { ok: true };
+}
+
+/** Challenge host logs a weigh-in on behalf of a member. */
+export async function adminLogWeighIn(
+  _prev: WeighInState,
+  formData: FormData,
+): Promise<WeighInState> {
+  const admin = await requireUser();
+  const challengeId = String(formData.get("challenge_id") ?? "");
+  const targetUserId = String(formData.get("target_user_id") ?? "");
+  const weight = Number(formData.get("weight"));
+  const weighedOn =
+    String(formData.get("weighed_on") ?? "") ||
+    new Date().toLocaleDateString("en-CA");
+  const photoUrl = String(formData.get("photo_url") ?? "").trim() || null;
+  const note = String(formData.get("note") ?? "").trim() || null;
+
+  if (!challengeId || !targetUserId) return { error: "Missing details." };
+  if (Number.isNaN(weight) || weight <= 0) return { error: "Enter a valid weight." };
+  if (weight > 2000) return { error: "That weight looks off." };
+
+  const supabase = await createClient();
+
+  // Only the host may log for others (RLS enforces this too).
+  const { data: challenge } = await supabase
+    .from("challenges")
+    .select("created_by")
+    .eq("id", challengeId)
+    .single();
+  if (!challenge || challenge.created_by !== admin.id) {
+    return { error: "Only the host can log for other members." };
+  }
+
+  const { error } = await supabase.from("weigh_ins").insert({
+    challenge_id: challengeId,
+    user_id: targetUserId,
+    weight,
+    weighed_on: weighedOn,
+    note: note ?? "Logged by host",
+    photo_url: photoUrl,
   });
 
   if (error) return { error: error.message };

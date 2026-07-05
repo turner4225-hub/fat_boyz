@@ -12,9 +12,11 @@ import {
   WINNER_RULE_LABELS,
   type MemberWithProfile,
 } from "@/lib/leaderboard";
+import { WEIGH_IN_BUCKET } from "@/lib/photos";
 import { Ring, RING_COLORS } from "./ring";
 import { CopyCode } from "./copy-code";
 import { WeighInForm } from "./weigh-in-form";
+import { AdminWeighInForm } from "./admin-weigh-in-form";
 import { ConfirmButton } from "./confirm-button";
 import {
   deleteWeighIn,
@@ -76,6 +78,20 @@ export default async function ChallengePage({
   const myWeighIns = weighIns
     .filter((w) => w.user_id === user.id)
     .sort((a, b) => b.weighed_on.localeCompare(a.weighed_on));
+
+  // Signed URLs for your weigh-in photos (private bucket, 1-hour links).
+  const myPhotoPaths = myWeighIns
+    .map((w) => w.photo_url)
+    .filter((p): p is string => !!p);
+  const photoUrls: Record<string, string> = {};
+  if (myPhotoPaths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from(WEIGH_IN_BUCKET)
+      .createSignedUrls(myPhotoPaths, 60 * 60);
+    for (const s of signed ?? []) {
+      if (s.path && s.signedUrl) photoUrls[s.path] = s.signedUrl;
+    }
+  }
 
   return (
     <div>
@@ -175,6 +191,7 @@ export default async function ChallengePage({
       <div className="mt-4">
         <WeighInForm
           challengeId={challenge.id}
+          userId={user.id}
           unit={unit}
           photoProof={challenge.photo_proof}
         />
@@ -247,11 +264,23 @@ export default async function ChallengePage({
       {/* Admin: manage members & payments */}
       {isAdmin && (
         <div className="mt-8">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Manage members</h2>
             <span className="text-xs text-muted">
               {paidCount}/{members.length} paid
             </span>
+          </div>
+          <div className="mb-3">
+            <AdminWeighInForm
+              challengeId={challenge.id}
+              adminUserId={user.id}
+              unit={unit}
+              photoProof={challenge.photo_proof}
+              members={members.map((m) => ({
+                user_id: m.user_id,
+                name: m.profile?.display_name ?? "Member",
+              }))}
+            />
           </div>
           <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {members.map((m) => (
@@ -331,16 +360,33 @@ export default async function ChallengePage({
                 key={w.id}
                 className="flex items-center justify-between gap-3 px-5 py-3"
               >
-                <div className="min-w-0">
-                  <span className="font-semibold">
-                    {fmtWeight(w.weight)} {unit}
-                  </span>
-                  <span className="ml-2 text-sm text-muted">
-                    {formatDate(w.weighed_on)}
-                  </span>
-                  {w.note && (
-                    <p className="truncate text-sm text-muted">{w.note}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  {w.photo_url && photoUrls[w.photo_url] && (
+                    <a
+                      href={photoUrls[w.photo_url]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-none"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photoUrls[w.photo_url]}
+                        alt="scale proof"
+                        className="h-10 w-10 rounded-lg border border-border object-cover"
+                      />
+                    </a>
                   )}
+                  <div className="min-w-0">
+                    <span className="font-semibold">
+                      {fmtWeight(w.weight)} {unit}
+                    </span>
+                    <span className="ml-2 text-sm text-muted">
+                      {formatDate(w.weighed_on)}
+                    </span>
+                    {w.note && (
+                      <p className="truncate text-sm text-muted">{w.note}</p>
+                    )}
+                  </div>
                 </div>
                 <form action={deleteWeighIn}>
                   <input type="hidden" name="weigh_in_id" value={w.id} />

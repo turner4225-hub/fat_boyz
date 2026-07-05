@@ -78,7 +78,7 @@ export interface ChallengeMember {
 
 export interface WeighIn {
   id: string;
-  challenge_id: string;
+  challenge_id: string | null; // null = a personal weigh-in (no challenge)
   user_id: string;
   weight: number;
   photo_url: string | null;

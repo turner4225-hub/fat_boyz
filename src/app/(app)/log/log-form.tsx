@@ -1,29 +1,35 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { logWeighInEverywhere, type LogState } from "./actions";
+import { PhotoInput } from "../photo-input";
 
 export function LogForm({
+  userId,
   unit,
   challengeNames,
 }: {
+  userId: string;
   unit: string;
   challengeNames: string[];
 }) {
+  const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [state, formAction, pending] = useActionState<LogState, FormData>(
     logWeighInEverywhere,
     undefined,
   );
   const today = new Date().toLocaleDateString("en-CA");
+  const hasChallenges = challengeNames.length > 0;
 
   if (state?.ok) {
     return (
       <div className="rounded-2xl border border-brand/40 bg-brand/5 p-6 text-center">
         <p className="text-lg font-bold text-brand">Logged! ✓</p>
         <p className="mt-1 text-sm text-muted">
-          Counted in {state.count}{" "}
-          {state.count === 1 ? "challenge" : "challenges"}.
+          {state.count && state.count > 0
+            ? `Counted in ${state.count} ${state.count === 1 ? "challenge" : "challenges"}.`
+            : "Saved to your personal weight log."}
         </p>
         <div className="mt-4 flex justify-center gap-3">
           <Link
@@ -76,8 +82,15 @@ export function LogForm({
         </label>
       </div>
 
+      <div className="mt-4">
+        <input type="hidden" name="photo_url" value={photoPath ?? ""} />
+        <PhotoInput userId={userId} onChange={setPhotoPath} />
+      </div>
+
       <p className="mt-3 text-xs text-muted">
-        Counts toward: {challengeNames.join(", ")}
+        {hasChallenges
+          ? `Counts toward: ${challengeNames.join(", ")}`
+          : "You're not in an active challenge — this saves to your personal weight log."}
       </p>
 
       {state?.error && (
