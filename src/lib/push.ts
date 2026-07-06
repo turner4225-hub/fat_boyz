@@ -1,6 +1,10 @@
 import "server-only";
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { statsByUser } from "@/lib/stats";
+import { buildLeaderboard, type MemberWithProfile } from "@/lib/leaderboard";
+import { reminderRecipients, winnerAnnouncement } from "@/lib/notify";
+import type { Challenge, WeighIn } from "@/lib/types";
 
 export type PushPayload = {
   title: string;
@@ -131,26 +135,31 @@ export async function sendWeighInReminders(): Promise<{
       .select("user_id, profile:profiles(push_enabled, weigh_in_reminders)")
       .eq("challenge_id", c.id);
 
-    const memberIds = (members ?? [])
-      .filter((m) => {
-        const p = m.profile as unknown as {
-          push_enabled: boolean;
-          weigh_in_reminders: boolean;
-        } | null;
-        return p?.push_enabled && p?.weigh_in_reminders;
-      })
-      .map((m) => m.user_id);
+    const reminderMembers = (members ?? []).map((m) => {
+      const p = m.profile as unknown as {
+        push_enabled: boolean;
+        weigh_in_reminders: boolean;
+      } | null;
+      return {
+        user_id: m.user_id,
+        push_enabled: !!p?.push_enabled,
+        weigh_in_reminders: !!p?.weigh_in_reminders,
+      };
+    });
 
-    if (memberIds.length === 0) continue;
-
+    // Who already logged their weight for today (the weigh-in day). With
+    // weigh-in propagation this row exists no matter which challenge they
+    // logged from, so we never nag someone who already weighed in.
     const { data: loggedToday } = await admin
       .from("weigh_ins")
       .select("user_id")
       .eq("challenge_id", c.id)
-      .eq("weighed_on", today);
+      .gte("weighed_on", today);
 
-    const logged = new Set((loggedToday ?? []).map((w) => w.user_id));
-    const needReminder = memberIds.filter((id) => !logged.has(id));
+    const needReminder = reminderRecipients(
+      reminderMembers,
+      (loggedToday ?? []).map((w) => w.user_id),
+    );
     if (needReminder.length === 0) continue;
 
     const { sent } = await sendPushToUsers(needReminder, {
@@ -162,4 +171,62 @@ export async function sendWeighInReminders(): Promise<{
   }
 
   return { sent: totalSent, challenges: challenges.length };
+}
+
+/**
+ * Announce winners for challenges that ended yesterday. Runs the day after the
+ * end date so the last day's weigh-ins are all counted, and fires exactly once
+ * per challenge (only "ended yesterday" matches on any given daily run).
+ */
+export async function sendWinnerAnnouncements(): Promise<{
+  announced: number;
+  sent: number;
+}> {
+  const admin = createAdminClient();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toLocaleDateString("en-CA");
+
+  const { data: challenges } = await admin
+    .from("challenges")
+    .select("*")
+    .eq("end_date", yStr);
+
+  if (!challenges?.length) return { announced: 0, sent: 0 };
+
+  let announced = 0;
+  let totalSent = 0;
+
+  for (const raw of challenges) {
+    const challenge = raw as Challenge;
+    const [{ data: memberRows }, { data: weighInRows }] = await Promise.all([
+      admin
+        .from("challenge_members")
+        .select("*, profile:profiles(*)")
+        .eq("challenge_id", challenge.id),
+      admin.from("weigh_ins").select("*").eq("challenge_id", challenge.id),
+    ]);
+
+    const members = (memberRows ?? []) as unknown as MemberWithProfile[];
+    if (members.length === 0) continue;
+    const weighIns = (weighInRows ?? []) as WeighIn[];
+
+    const stats = statsByUser(weighIns);
+    const rows = buildLeaderboard(members, stats, challenge, weighIns);
+    const winnerNames = rows
+      .filter((r) => r.isLeader)
+      .map((r) => r.member.profile?.display_name ?? "Member");
+
+    const message = winnerAnnouncement(challenge, winnerNames, members.length);
+    if (!message) continue; // nobody weighed in — nothing to announce
+
+    const { sent } = await sendPushToUsers(
+      members.map((m) => m.user_id),
+      { ...message, url: `/challenges/${challenge.id}` },
+    );
+    announced++;
+    totalSent += sent;
+  }
+
+  return { announced, sent: totalSent };
 }
