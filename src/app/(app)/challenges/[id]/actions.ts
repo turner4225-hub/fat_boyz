@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { saveOwnWeighIn } from "@/lib/weigh-ins.server";
+import type { WeightUnit } from "@/lib/types";
 
 export type WeighInState = { error?: string; ok?: boolean } | undefined;
 
@@ -66,7 +68,7 @@ export async function logWeighIn(
   // Enforce the challenge's photo-proof setting + date window server-side.
   const { data: challenge } = await supabase
     .from("challenges")
-    .select("photo_proof, start_date, end_date")
+    .select("photo_proof, unit, start_date, end_date")
     .eq("id", challengeId)
     .single();
   if (challenge?.photo_proof === "required" && !photoUrl) {
@@ -75,18 +77,19 @@ export async function logWeighIn(
   const dateError = validateWeighInDate(weighedOn, challenge?.start_date);
   if (dateError) return { error: dateError };
 
-  const { error } = await supabase.from("weigh_ins").insert({
-    challenge_id: challengeId,
-    user_id: user.id,
+  // A member's weight is one real number — log it across every active
+  // challenge they're in, not just this one.
+  const result = await saveOwnWeighIn({
+    userId: user.id,
     weight,
-    weighed_on: weighedOn,
+    sourceUnit: (challenge?.unit as WeightUnit) ?? "lb",
+    weighedOn,
+    photoUrl,
     note,
-    photo_url: photoUrl,
+    currentChallengeId: challengeId,
   });
+  if (result.error) return { error: result.error };
 
-  if (error) return { error: error.message };
-
-  revalidatePath(`/challenges/${challengeId}`);
   return { ok: true };
 }
 
@@ -122,6 +125,15 @@ export async function adminLogWeighIn(
   }
   const dateError = validateWeighInDate(weighedOn, challenge.start_date);
   if (dateError) return { error: dateError };
+
+  // Host logging for a member stays scoped to THIS challenge only. Replace any
+  // existing same-day entry for that member here so it corrects, not stacks.
+  await supabase
+    .from("weigh_ins")
+    .delete()
+    .eq("user_id", targetUserId)
+    .eq("challenge_id", challengeId)
+    .eq("weighed_on", weighedOn);
 
   const { error } = await supabase.from("weigh_ins").insert({
     challenge_id: challengeId,

@@ -106,6 +106,10 @@ export function WeighInForm({
         </div>
       )}
 
+      <p className="mt-3 text-xs text-muted">
+        Counts toward every challenge you&apos;re in right now.
+      </p>
+
       {state?.error && (
         <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
           {state.error}
