@@ -265,45 +265,47 @@ export default async function ChallengePage({
                 ? "text-brand"
                 : "text-ring1";
             return (
-              <li
-                key={row.member.id}
-                className={`flex items-center gap-3 rounded-2xl border p-3 pr-4 ${
-                  isYou
-                    ? "border-brand/40 bg-brand/5"
-                    : "border-border bg-card"
-                }`}
-              >
-                <span className="w-5 text-center text-sm font-extrabold text-muted">
-                  {row.rank}
-                </span>
-                <Ring fill={row.ringFill} color={color} label={name.charAt(0).toUpperCase()} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <span className="truncate">{name}</span>
-                    {row.isLeader && <span>👑</span>}
-                    {isYou && (
-                      <span className="text-xs font-medium text-muted">
-                        (you)
-                      </span>
-                    )}
-                    {row.missed && (
-                      <span className="rounded-full bg-gold px-1.5 py-0.5 text-[9px] font-extrabold text-black uppercase">
-                        missed
-                      </span>
-                    )}
+              <li key={row.member.id}>
+                <Link
+                  href={`/challenges/${challenge.id}/member/${row.member.user_id}`}
+                  className={`flex items-center gap-3 rounded-2xl border p-3 pr-4 transition hover:border-brand ${
+                    isYou
+                      ? "border-brand/40 bg-brand/5"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <span className="w-5 text-center text-sm font-extrabold text-muted">
+                    {row.rank}
+                  </span>
+                  <Ring fill={row.ringFill} color={color} label={name.charAt(0).toUpperCase()} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <span className="truncate">{name}</span>
+                      {row.isLeader && <span>👑</span>}
+                      {isYou && (
+                        <span className="text-xs font-medium text-muted">
+                          (you)
+                        </span>
+                      )}
+                      {row.missed && (
+                        <span className="rounded-full bg-gold px-1.5 py-0.5 text-[9px] font-extrabold text-black uppercase">
+                          missed
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted">
+                      {row.stats
+                        ? `${fmtWeight(row.stats.start)} → ${fmtWeight(
+                            row.stats.current,
+                          )} ${unit}`
+                        : "No weigh-ins yet"}
+                      {row.member.has_paid ? "" : " · not paid"}
+                    </p>
                   </div>
-                  <p className="truncate text-xs text-muted">
-                    {row.stats
-                      ? `${fmtWeight(row.stats.start)} → ${fmtWeight(
-                          row.stats.current,
-                        )} ${unit}`
-                      : "No weigh-ins yet"}
-                    {row.member.has_paid ? "" : " · not paid"}
-                  </p>
-                </div>
-                <span className={`text-lg font-black ${metricColor}`}>
-                  {row.displayMetric}
-                </span>
+                  <span className={`text-lg font-black ${metricColor}`}>
+                    {row.displayMetric}
+                  </span>
+                </Link>
               </li>
             );
           })}
