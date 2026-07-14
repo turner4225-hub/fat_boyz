@@ -264,6 +264,8 @@ export default async function ChallengePage({
                 rank: r.rank,
                 name: r.member.profile?.display_name ?? "Member",
                 metric: r.displayMetric,
+                ringFill: r.ringFill,
+                isLoss: (r.stats?.lostAbs ?? 0) >= 0,
               }))}
             />
           </div>

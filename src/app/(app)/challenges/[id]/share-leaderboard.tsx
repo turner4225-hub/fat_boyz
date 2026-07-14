@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { formatLeaderboardText, type ShareRow } from "@/lib/share";
+import { formatLeaderboardText } from "@/lib/share";
+import { drawLeaderboardCard, type CardRow } from "@/lib/leaderboard-image";
 
 /**
- * Shares the standings as plain text. On a phone this opens the native share
- * sheet (Messages, WhatsApp, …); elsewhere it falls back to the clipboard.
+ * Shares the standings as an image card via the native share sheet (Messages,
+ * WhatsApp, …). Falls back to sharing/copying plain text where a browser can't
+ * share files.
  */
 export function ShareLeaderboard({
   challengeName,
@@ -16,14 +18,14 @@ export function ShareLeaderboard({
 }: {
   challengeName: string;
   ruleLabel: string;
-  rows: ShareRow[];
+  rows: CardRow[];
   pot: number;
   currency: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<"idle" | "working" | "copied">("idle");
 
-  async function share() {
-    const text = formatLeaderboardText({
+  function textVersion() {
+    return formatLeaderboardText({
       challengeName,
       ruleLabel,
       rows,
@@ -31,23 +33,51 @@ export function ShareLeaderboard({
       currency,
       url: window.location.origin,
     });
+  }
 
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({ text });
-        return;
-      } catch (err) {
-        // The user closing the share sheet isn't an error worth reacting to.
-        if ((err as Error)?.name === "AbortError") return;
-      }
-    }
-
+  async function share() {
+    setStatus("working");
     try {
+      const blob = await drawLeaderboardCard({
+        challengeName,
+        ruleLabel,
+        rows,
+        pot,
+        currency,
+        siteLabel: window.location.host,
+      });
+
+      if (blob) {
+        const file = new File([blob], "leaderboard.png", { type: "image/png" });
+        if (navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] });
+            return;
+          } catch (err) {
+            // Closing the share sheet isn't a failure worth reacting to.
+            if ((err as Error)?.name === "AbortError") return;
+          }
+        }
+      }
+
+      // No file sharing (desktop browsers, older iOS) — fall back to text.
+      const text = textVersion();
+      if (navigator.share) {
+        try {
+          await navigator.share({ text });
+          return;
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return;
+        }
+      }
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setStatus("copied");
+      setTimeout(() => setStatus("idle"), 2000);
+      return;
     } catch {
       /* nothing more we can do */
+    } finally {
+      setStatus((s) => (s === "working" ? "idle" : s));
     }
   }
 
@@ -55,9 +85,10 @@ export function ShareLeaderboard({
     <button
       type="button"
       onClick={share}
-      className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted transition hover:border-brand hover:text-foreground"
+      disabled={status === "working"}
+      className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted transition hover:border-brand hover:text-foreground disabled:opacity-60"
     >
-      {copied ? "Copied ✓" : "Share"}
+      {status === "copied" ? "Copied ✓" : status === "working" ? "…" : "Share"}
     </button>
   );
 }
