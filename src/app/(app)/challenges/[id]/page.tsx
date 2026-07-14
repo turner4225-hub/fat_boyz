@@ -15,6 +15,7 @@ import {
 import { WEIGH_IN_BUCKET } from "@/lib/photos";
 import { Ring, RING_COLORS } from "./ring";
 import { CopyCode } from "./copy-code";
+import { ShareLeaderboard } from "./share-leaderboard";
 import { WeighInForm } from "./weigh-in-form";
 import { AdminWeighInForm } from "./admin-weigh-in-form";
 import { ConfirmButton } from "./confirm-button";
@@ -248,11 +249,24 @@ export default async function ChallengePage({
 
       {/* Leaderboard */}
       <div className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
-          <span className="rounded-full bg-card-2 px-3 py-1 text-xs font-semibold text-muted">
-            {WINNER_RULE_LABELS[challenge.winner_rule]}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-card-2 px-3 py-1 text-xs font-semibold text-muted">
+              {WINNER_RULE_LABELS[challenge.winner_rule]}
+            </span>
+            <ShareLeaderboard
+              challengeName={challenge.name}
+              ruleLabel={WINNER_RULE_LABELS[challenge.winner_rule]}
+              pot={pot}
+              currency={challenge.currency}
+              rows={rows.map((r) => ({
+                rank: r.rank,
+                name: r.member.profile?.display_name ?? "Member",
+                metric: r.displayMetric,
+              }))}
+            />
+          </div>
         </div>
         <ul className="space-y-2">
           {rows.map((row) => {
